@@ -49,6 +49,7 @@ Buffer objects are used and returned by some of the provided bindings, such as `
 The Crypto library
 ------------------
 The crypto library contains two functions, `crypto.sha1` and `crypto.random`. `crypto.random(x)` returns a buffer object of size `x`
-filled with random data. The function is an almost direct mapping to the kernel's `get_random_bytes` function. `crypto.sha1(x)` returns
-a buffer of size 20 bytes (one SHA1 hash) and takes as its parameter `x` a buffer of data to be hashed. At the moment, the size of `x`
-is limited to `PAGE_SZ`, which is 4Kb on most x86 machines.
+filled with random data. The function is an almost direct mapping to the kernel's `get_random_bytes` function.
+
+`crypto.sha1(x)` returns a buffer of size 20 bytes (one SHA1 hash) and takes as its parameter `x` a buffer of data to be hashed. At
+the moment, the size of `x` is limited to `PAGE_SZ`, which is 4Kb on most x86 machines.
