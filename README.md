@@ -1,6 +1,5 @@
 lunatik-ng
 ==========
-
 This repository contains the ongoing effort of porting the [Lunatik Lua engine](http://sourceforge.net/projects/lunatik/) to current
 Linux kernels. There are a few differences between the original lunatik and lunatik-ng:
 
@@ -18,7 +17,6 @@ Linux kernels. There are a few differences between the original lunatik and luna
 
 Try it out
 ----------
-
 * Grab the latest Linux kernel tarball from kernel.org (e.g. [from here](www.kernel.org/pub/linux/kernel/v3.0/linux-3.6.6.tar.bz2))
 * Extract it to `some_folder`
 * Copy the contents of this directory structure to `some_folder`:
@@ -36,3 +34,21 @@ Try it out
     return type({ 123 })
 
   which should place the string `number` in `result`.
+
+The buffer library
+------------------
+Calling `buffer.new(x)` returns a new buffer object of size `x`. The buffer object represents a `char *` of length `x`. Modifying and
+reading the buffer follows the familiar table interface:
+
+    buf = buffer.new(16)
+    buf[1]  = 100
+    buf[16] = 255
+
+Buffer objects are used and returned by some of the provided bindings, such as `crypto.sha1` and `crypto.random`.
+
+The Crypto library
+------------------
+The crypto library contains two functions, `crypto.sha1` and `crypto.random`. `crypto.random(x)` returns a buffer object of size `x`
+filled with random data. The function is an almost direct mapping to the kernel's `get_random_bytes` function. `crypto.sha1(x)` returns
+a buffer of size 20 bytes (one SHA1 hash) and takes as its parameter `x` a buffer of data to be hashed. At the moment, the size of `x`
+is limited to `PAGE_SZ`, which is 4Kb on most x86 machines.
