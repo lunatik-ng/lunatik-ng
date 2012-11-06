@@ -19,21 +19,11 @@ Try it out
 ----------
 * Grab the latest Linux kernel tarball from kernel.org (e.g. [from here](www.kernel.org/pub/linux/kernel/v3.0/linux-3.6.6.tar.bz2))
 * Extract it to `some_folder`
-* Copy the contents of this directory structure to `some_folder`:
-
-    cp -R this_folder some_folder
-
+* Copy the contents of this directory structure to `some_folder`: `cp -R this_folder some_folder`
 * Build the kernel as usual, make sure to check `Library functions -> Lunatik Lua engine`
-
-* The patches add syscall #350 to the kernel. The syscall has the following prototype:
-
-    SYS_LUA (const char *code, size_t code_sz, char *result, size_t result_sz)
-
-  to make sure lunatik is working, you can execute the following lua code via the syscall:
-
-    return type({ 123 })
-
-  which should place the string `number` in `result`.
+* The patches add syscall #350 to the kernel. The syscall has the following prototype: `SYS_LUA (const char *code, size_t code_sz,
+  char *result, size_t result_sz)` to make sure lunatik is working, you can execute the following lua code via the syscall: `return
+  type({ 123 })` which should place the string `number` in `result`.
 
 The buffer library
 ------------------
