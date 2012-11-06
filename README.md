@@ -22,8 +22,9 @@ Try it out
 * Copy the contents of this directory structure to `some_folder`: `cp -R this_folder some_folder`
 * Build the kernel as usual, make sure to check `Library functions -> Lunatik Lua engine`
 * The patches add syscall #350 to the kernel. The syscall has the following prototype: `SYS_LUA (const char *code, size_t code_sz,
-  char *result, size_t result_sz)` to make sure lunatik is working, you can execute the following lua code via the syscall: `return
-  type({ 123 })` which should place the string `number` in `result`.
+  char *result, size_t result_sz)`
+* To make sure lunatik is working, you can execute the following lua code via the syscall: `return type({ 123 })` which should place
+  the string `number` in `result`.
 
 The buffer library
 ------------------
