@@ -1,7 +1,7 @@
 lunatik-ng
 ==========
 
-This repository contains the ongoing effort of porting the [http://sourceforge.net/projects/lunatik/](Lunatik Lua engine) to current
+This repository contains the ongoing effort of porting the [Lunatik Lua engine](http://sourceforge.net/projects/lunatik/) to current
 Linux kernels. There are a few differences between the original lunatik and lunatik-ng:
 
 * Lunatik works on x86\_64
@@ -19,7 +19,7 @@ Linux kernels. There are a few differences between the original lunatik and luna
 Try it out
 ----------
 
-* Grab the latest Linux kernel tarball from kernel.org (e.g. [www.kernel.org/pub/linux/kernel/v3.0/linux-3.6.6.tar.bz2](from here))
+* Grab the latest Linux kernel tarball from kernel.org (e.g. [from here](www.kernel.org/pub/linux/kernel/v3.0/linux-3.6.6.tar.bz2))
 * Extract it to `some_folder`
 * Copy the contents of this directory structure to `some_folder`:
 
