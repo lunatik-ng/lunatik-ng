@@ -3,7 +3,7 @@ lunatik-ng
 This repository contains the ongoing effort of porting the [Lunatik Lua engine](http://sourceforge.net/projects/lunatik/) to current
 Linux kernels. There are a few differences between the original lunatik and lunatik-ng:
 
-* Lunatik works on x86\_64
+* Lunatik-ng works on x86\_64
 * It is memory-leak free
 * Modifying tables with constructs such as `buf = { 123 }; buf = foo(buf)` does not cause the kernel to `BUG()`. A side effect of this
   is that, contrary to the original lunatik, lunatik-ng does not support asynchroneous execution of Lua code. This will be added back
