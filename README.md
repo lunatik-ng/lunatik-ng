@@ -1,5 +1,8 @@
 lunatik-ng
 ==========
+This work is part of the research project: [Towards Dynamic Scripted pNFS Layouts (pdf)](http://www.pdsw.org/pdsw12/papers/grawinkle-pdsw12.pdf)
+
+
 This repository contains the ongoing effort of porting the [Lunatik Lua engine](http://sourceforge.net/projects/lunatik/) to current
 Linux kernels. There are a few differences between the original lunatik and lunatik-ng:
 
