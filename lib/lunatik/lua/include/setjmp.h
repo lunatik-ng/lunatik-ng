@@ -6,9 +6,10 @@
 #define _LUNATIK_SETJMP_H
 /* FIXME: HACK ALERT! */
 #include "../../../../arch/x86/um/shared/sysdep/archsetjmp.h"
+#include <linux/linkage.h>
 
-extern int setjmp(jmp_buf);
-extern void longjmp(jmp_buf, int);
+asmlinkage extern int setjmp(jmp_buf);
+asmlinkage extern void longjmp(jmp_buf, int);
 #endif
 
 /*

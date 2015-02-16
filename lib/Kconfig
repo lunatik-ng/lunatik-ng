@@ -50,6 +50,15 @@ config LUNATIK
 	  in the context of the kernel. This enables a new syscall (#350) with the signature
 	  sys_lua(char *code, size_t code_len, char *result, size_t result_len).
 
+config PERCPU_RWSEM
+	bool
+
+config ARCH_USE_CMPXCHG_LOCKREF
+	bool
+
+config ARCH_HAS_FAST_MULTIPLIER
+	bool
+
 config CRC_CCITT
 	tristate "CRC-CCITT functions"
 	help

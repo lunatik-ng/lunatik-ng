@@ -33,11 +33,13 @@ asmlinkage long sys_lua(const char * code, size_t sz_code, char * result, size_t
 	}
 
 	if (result == NULL)
+		/* will execute asynchronously and will free code_ */
 		ret = lunatik_loadcode(code_, sz_code, (char **) NULL, NULL);
 	else {
 		size_t sz_result_;
 		char * result_;
 
+		/* will wait for result and will not free code_ */
 		ret = lunatik_loadcode(code_, sz_code, & result_, & sz_result_);
 
 		if (result_ != NULL){
@@ -52,9 +54,10 @@ asmlinkage long sys_lua(const char * code, size_t sz_code, char * result, size_t
 
 			kfree(result_);
 		}
+
+		kfree(code_);
 	}
 
-	kfree(code_);
 	return ret;
 }
 
