@@ -1,5 +1,5 @@
 #include <linux/time.h>
-#include "../lunatik.h"
+#include <linux/lunatik.h>
 
 int
 lunatik_gc_count(lua_State *L) {

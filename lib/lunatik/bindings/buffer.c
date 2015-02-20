@@ -1,5 +1,5 @@
 #include <linux/slab.h>
-#include "../lunatik.h"
+#include <linux/lunatik.h>
 
 int
 lunatik_buf_length(lua_State *L) {

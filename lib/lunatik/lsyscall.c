@@ -15,7 +15,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include "lunatik.h"
+#include <linux/lunatik.h>
 
 /* exported code */
 

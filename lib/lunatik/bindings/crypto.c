@@ -6,7 +6,7 @@
 
 #include <crypto/hash.h>
 
-#include "../lunatik.h"
+#include <linux/lunatik.h>
 #include "buffer.h"
 
 int

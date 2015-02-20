@@ -3,7 +3,7 @@
  * See Copyright Notice at the end of this file. 
  */
 
-#include "lua/lauxlib.h"
+#include <linux/lunatik/lauxlib.h>
 
 int lunatik_loadcode(char * code, size_t sz_code, char ** presult, size_t * psz_result);
 

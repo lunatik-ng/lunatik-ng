@@ -1,5 +1,5 @@
 #include <linux/kernel.h>
-#include "../lunatik.h"
+#include <linux/lunatik.h>
 
 int
 lunatik_printk(lua_State *L) {
