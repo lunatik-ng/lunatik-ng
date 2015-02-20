@@ -47,7 +47,9 @@ config LUNATIK
 	default y
 	help
 	  Enables the Lunatik Lua engine which allows execution of Lua code
-	  in the context of the kernel. This enables a new syscall (#350) with the signature
+	  in the context of the kernel.
+
+	  For userspace purposes a syscall (#359) is provided. Signature:
 	  sys_lua(char *code, size_t code_len, char *result, size_t result_len).
 
 config PERCPU_RWSEM
