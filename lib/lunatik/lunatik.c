@@ -5,14 +5,9 @@
 
 //#define USE_LUNATIK_NG_LOADCODE
 
-#include "lua/lua.h"
-#include "lua/lauxlib.h"
-#include "lkworkqueue.h"
-
-#include "bindings/printk.h"
-#include "bindings/misc.h"
-#include "bindings/crypto.h"
-#include "bindings/buffer.h"
+#include "lua.h"
+#include "lauxlib.h"
+#include "lunatik_kworkqueue.h"
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
@@ -44,6 +39,13 @@ static void openlib_work_handler(struct work_struct * work);
 inline static void openlib(lua_State * L, lua_CFunction luaopen_func);
 
 /* exported code */
+
+lua_State *lunatik_get_global_state(void)
+{
+	/* TODO implement reference counting (incl. module ref count) */
+	return L;
+}
+EXPORT_SYMBOL(lunatik_get_global_state);
 
 #ifdef USE_LUNATIK_NG_LOADCODE
 int lunatik_loadcode(char * code, size_t sz_code, char ** presult, size_t * psz_result)
@@ -133,6 +135,7 @@ int lunatik_loadcode(char * code, size_t sz_code, char ** presult, size_t * psz_
 	return 0;
 } /* end lunatik_loadcode */
 #endif
+EXPORT_SYMBOL(lunatik_loadcode);
 
 int lunatik_openlib(lua_CFunction luaopen_func)
 {
@@ -144,6 +147,7 @@ int lunatik_openlib(lua_CFunction luaopen_func)
 
 	return 0;
 } /* end lunatik_openlib */
+EXPORT_SYMBOL(lunatik_openlib);
 
 /* static code */
 
@@ -241,35 +245,18 @@ inline static void openlib(lua_State * L, lua_CFunction luaopen_func)
 
 static int __init lunatik_init(void)
 {
-	struct luaL_Reg lib_crypto[] = {
-		{ "sha1", &lunatik_sha1 },
-		{ "random", &lunatik_get_random_bytes },
-		{ NULL, NULL }
-	};
-	struct luaL_reg lib_buffer[] = {
-		{ "new", &lunatik_buf_new },
-		{ NULL, NULL }
-	};
-
 	L = lua_open();
 	if (L == NULL)
 		return -ENOMEM;
 
 	lunatikW_init(L);
 
-	lua_register(L, "print", &lunatik_printk);
-
-	lua_register(L, "type", &lunatik_type);
-	lua_register(L, "gc_count", &lunatik_gc_count);
-
-	luaL_register(L, "crypto", lib_crypto);
-	luaL_register(L, "buffer", lib_buffer);
-
 	printk("Lunatik init done\n");
 	return 0;
 } /* end lunatik_init */
 
-MODULE_AUTHOR("Lourival Vieira Neto <lneto@inf.puc-rio.br>");
+MODULE_AUTHOR("Lourival Vieira Neto <lneto@inf.puc-rio.br>, Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
+MODULE_LICENSE("Dual MIT/GPL");
 
 module_init(lunatik_init);
 

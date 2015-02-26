@@ -4,7 +4,7 @@
  * See Copyright Notice in lunatik.h
  */
 
-#include "lkworkqueue.h"
+#include "lunatik_kworkqueue.h"
 #include <linux/kernel.h>
 
 /* static data */

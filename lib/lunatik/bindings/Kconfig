@@ -1,0 +1,47 @@
+config LUNATIK_PRINTK
+	tristate "Printk bindings for Lua"
+	default n
+	depends on LUNATIK
+	help
+	  Provide funtion print(...) to lua code with an interface to printk.
+
+config LUNATIK_INSPECT
+	tristate "Inspection functions for Lua"
+	default n
+	depends on LUNATIK
+	help
+	  Provide funtions type(o) and gc_count() as simple inspectionfuntions.
+	  While type(o) returns the type name of a Lua object as string,
+	  gc_count() returns the current amount of memory used by Lua.
+
+config LUNATIK_CRYPTO
+	tristate "Crypto library for Lua"
+	default n
+	depends on LUNATIK
+	select LUNATIK_BUFFER
+	help
+	  The crypto library contains two functions, crypto.sha1 and
+	  crypto.random.  crypto.random(x) returns a buffer object of size x
+	  filled with random data.  The function is an almost direct mapping to
+	  the kernel's get_random_bytes function.
+
+	  crypto.sha1(x) returns a buffer of size 20 bytes (one SHA1 hash) and
+	  takes as its parameter x a buffer of data to be hashed.  At the
+	  moment, the size of x is limited to PAGE_SZ, which is 4Kb on most x86
+	  machines.
+
+config LUNATIK_BUFFER
+	tristate "Buffer library for Lua"
+	default n
+	depends on LUNATIK
+	help
+	  Calling buffer.new(x) returns a new buffer object of size x.  The
+	  buffer object represents a (char *) of length x.  Modifying and
+	  reading the buffer follows the familiar table interface:
+
+	  buf = buffer.new(16)
+	  buf[1]  = 100
+	  buf[16] = 255
+
+	  Buffer objects are used and returned by some of the provided bindings,
+	  such as crypto.sha1 and crypto.random.

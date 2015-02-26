@@ -1,4 +1,5 @@
 #include <linux/slab.h>
+#include <linux/module.h>
 #include <linux/lunatik.h>
 
 int
@@ -6,6 +7,7 @@ lunatik_buf_length(lua_State *L) {
 	lua_pushinteger(L, lua_objlen(L, -1));
 	return 1;
 }
+EXPORT_SYMBOL(lunatik_buf_length);
 
 int
 lunatik_buf_call(lua_State *L) {
@@ -26,6 +28,7 @@ lunatik_buf_call(lua_State *L) {
 
 	return 1;
 }
+EXPORT_SYMBOL(lunatik_buf_call);
 
 int
 lunatik_buf_newindex(lua_State *L) {
@@ -84,3 +87,24 @@ lunatik_buf_new(lua_State *L) {
 
 	return 1;
 }
+EXPORT_SYMBOL(lunatik_buf_new);
+
+static int __init
+lunatik_buf_init(void)
+{
+	struct luaL_reg lib_buffer[] = {
+		{ "new", &lunatik_buf_new },
+		{ NULL, NULL }
+	};
+
+	lua_State *L = lunatik_get_global_state();
+
+	luaL_register(L, "buffer", lib_buffer);
+
+	return 0;
+}
+
+MODULE_AUTHOR("Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
+MODULE_LICENSE("Dual MIT/GPL");
+
+module_init(lunatik_buf_init);

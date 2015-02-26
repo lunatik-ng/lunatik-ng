@@ -1,0 +1,20 @@
+menu "Lunatik Lua engine"
+
+config LUNATIK
+	tristate "Enable Lunatik Lua engine"
+	default n
+	help
+	  Enables the Lunatik Lua engine which allows execution of Lua code
+	  in the context of the kernel.
+
+config LUNATIK_SYSCALL
+	boolean "Provide system call to Lunatik Lua engine"
+	default n
+	depends on LUNATIK=y
+	help
+	  For userspace purposes a syscall (#359) is provided.  Signature:
+	  sys_lua(char *code, size_t code_len, char *result, size_t result_len).
+
+source "lib/lunatik/bindings/Kconfig"
+
+endmenu

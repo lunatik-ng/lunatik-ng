@@ -42,15 +42,7 @@ config GENERIC_IO
 config STMP_DEVICE
 	bool
 
-config LUNATIK
-	boolean "Enable Lunatik Lua Engine"
-	default y
-	help
-	  Enables the Lunatik Lua engine which allows execution of Lua code
-	  in the context of the kernel.
-
-	  For userspace purposes a syscall (#359) is provided. Signature:
-	  sys_lua(char *code, size_t code_len, char *result, size_t result_len).
+source "lib/lunatik/Kconfig"
 
 config PERCPU_RWSEM
 	bool

@@ -5,6 +5,8 @@
 
 #include <linux/lunatik/lauxlib.h>
 
+lua_State *lunatik_get_global_state(void);
+
 int lunatik_loadcode(char * code, size_t sz_code, char ** presult, size_t * psz_result);
 
 int lunatik_openlib(lua_CFunction luaopen_func);

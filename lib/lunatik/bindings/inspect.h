@@ -1,5 +1,5 @@
-#ifndef __LUNATIK_BINDINGS_MISC
-#define __LUNATIK_BINDINGS_MISC
+#ifndef __LUNATIK_BINDINGS_INSPECT
+#define __LUNATIK_BINDINGS_INSPECT
 
 #define LF(name) int lunatik_##name(lua_State *L)
 

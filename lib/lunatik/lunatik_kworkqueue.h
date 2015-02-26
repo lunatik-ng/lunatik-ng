@@ -4,7 +4,7 @@
  * See Copyright Notice in lunatik.h
  */
 
-#include "lua/lua.h"
+#include "lua.h"
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 

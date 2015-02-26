@@ -45,5 +45,3 @@ else
         lib-y += copy_user_64.o copy_user_nocache_64.o
 	lib-y += cmpxchg16b_emu.o
 endif
-
-obj-$(CONFIG_LUNATIK) += lunatik/

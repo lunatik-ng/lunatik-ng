@@ -1,3 +1,4 @@
+#include <linux/module.h>
 #include <linux/crypto.h>
 #include <linux/scatterlist.h>
 #include <linux/err.h>
@@ -45,6 +46,7 @@ lunatik_sha1(lua_State *L) {
 
 	return 1;
 }
+EXPORT_SYMBOL(lunatik_sha1);
 
 int
 lunatik_get_random_bytes(lua_State *L) {
@@ -63,3 +65,25 @@ lunatik_get_random_bytes(lua_State *L) {
 	get_random_bytes(buf, n);	
 	return 1;
 }
+EXPORT_SYMBOL(lunatik_get_random_bytes);
+
+static int __init
+lunatik_crypto_init(void)
+{
+	struct luaL_Reg lib_crypto[] = {
+		{ "sha1", &lunatik_sha1 },
+		{ "random", &lunatik_get_random_bytes },
+		{ NULL, NULL }
+	};
+
+	lua_State *L = lunatik_get_global_state();
+
+	luaL_register(L, "crypto", lib_crypto);
+
+	return 0;
+}
+
+MODULE_AUTHOR("Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
+MODULE_LICENSE("Dual MIT/GPL");
+
+module_init(lunatik_crypto_init);
