@@ -1,5 +1,3 @@
-obj-y += bindings/
-
 lua_objects := lapi.o lcode.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
 	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
 	ltm.o lundump.o lvm.o lzio.o lauxlib.o
@@ -38,3 +36,9 @@ $(obj)/ksyms.c: $(src)/gen_ksyms.sh $(addprefix $(src)/,$(lua_headers)) $(addpre
 	$(call cmd,lua_ksyms)
 
 clean-files += ksyms.c
+
+#
+# Bindings
+#
+
+obj-y += bindings/
