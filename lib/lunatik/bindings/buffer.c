@@ -2,15 +2,13 @@
 #include <linux/module.h>
 #include <linux/lunatik.h>
 
-int
-lunatik_buf_length(lua_State *L) {
+int lunatik_buf_length(lua_State *L) {
 	lua_pushinteger(L, lua_objlen(L, -1));
 	return 1;
 }
 EXPORT_SYMBOL(lunatik_buf_length);
 
-int
-lunatik_buf_call(lua_State *L) {
+int lunatik_buf_call(lua_State *L) {
 	size_t buffer_len;
 	off_t idx;
 	char *buf;
@@ -30,8 +28,7 @@ lunatik_buf_call(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_buf_call);
 
-int
-lunatik_buf_newindex(lua_State *L) {
+int lunatik_buf_newindex(lua_State *L) {
 	char *buf = (char *) luaL_checkudata(L, -3, "buffer");
 	lua_Number idx = luaL_checkinteger(L, -2);
 	lua_Number val = luaL_checkinteger(L, -1);
@@ -50,8 +47,7 @@ lunatik_buf_newindex(lua_State *L) {
 	return 0;
 }
 
-int
-lunatik_buf_index(lua_State *L) {
+int lunatik_buf_index(lua_State *L) {
 	char *buf = (char *) luaL_checkudata(L, -2, "buffer");
 	lua_Number idx = luaL_checkinteger(L, -1);
 
@@ -64,8 +60,7 @@ lunatik_buf_index(lua_State *L) {
 	return 1;
 }
 
-int
-lunatik_buf_new(lua_State *L) {
+int lunatik_buf_new(lua_State *L) {
 	/*  TODO: create buffer from table */
 	lua_Integer size = luaL_checkinteger(L, -1);
 	lua_pop(L, 1);
@@ -89,8 +84,7 @@ lunatik_buf_new(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_buf_new);
 
-static int __init
-lunatik_buf_init(void)
+static int __init lunatik_buf_init(void)
 {
 	struct luaL_reg lib_buffer[] = {
 		{ "new", &lunatik_buf_new },

@@ -10,7 +10,7 @@ $(foreach lua_object, $(lua_objects), \
 	$(eval CFLAGS_$(lua_object) = -I$(src)/fakelibc_include))
 
 obj-$(CONFIG_LUNATIK) += lunatik_core.o
-lunatik_core-objs := lunatik_kworkqueue.o lunatik.o
+lunatik_core-objs := lunatik_workqueue.o lunatik.o
 lunatik_core-objs += $(lua_objects)
 
 # syscall cannot be defined in a module

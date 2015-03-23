@@ -2,15 +2,13 @@
 #include <linux/time.h>
 #include <linux/lunatik.h>
 
-int
-lunatik_gc_count(lua_State *L) {
+int lunatik_gc_count(lua_State *L) {
 	lua_pushinteger(L, lua_gc(L, LUA_GCCOUNT, 0));
 	return 1;
 }
 EXPORT_SYMBOL(lunatik_gc_count);
 
-int
-lunatik_type(lua_State *L) {
+int lunatik_type(lua_State *L) {
 	const char *type = luaL_typename(L, -1);
 	lua_pop(L, 1);
 	lua_pushstring(L, type);
@@ -18,8 +16,7 @@ lunatik_type(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_type);
 
-static int __init
-lunatik_inspect_init(void)
+static int __init lunatik_inspect_init(void)
 {
 	lua_State *L = lunatik_get_global_state();
 

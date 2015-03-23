@@ -1,5 +1,5 @@
-/* 
- * lsyscall.c 
+/*
+ * lunatik_syscall.c
  * Lua System Call
  * See Copyright Notice in lunatik.h
  */
@@ -10,20 +10,17 @@
 #include <linux/mm.h>
 #include <linux/sched.h>
 #include <linux/hardirq.h>
-
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
-
 #include <linux/lunatik.h>
 
-/* exported code */
-
-asmlinkage long sys_lua(const char * code, size_t sz_code, char * result, size_t sz_result)
+asmlinkage long sys_lua(const char *code, size_t sz_code,
+			char *result, size_t sz_result)
 {
 	int ret = 1;
 
-	char * code_ = (char *) kmalloc(sz_code, GFP_KERNEL);
+	char *code_ = kmalloc(sz_code, GFP_KERNEL);
 	if (code_ == NULL)
 		return -ENOMEM;
 
@@ -34,13 +31,13 @@ asmlinkage long sys_lua(const char * code, size_t sz_code, char * result, size_t
 
 	if (result == NULL)
 		/* will execute asynchronously and will free code_ */
-		ret = lunatik_loadcode(code_, sz_code, (char **) NULL, NULL);
+		ret = lunatik_loadcode(code_, sz_code, NULL, NULL);
 	else {
 		size_t sz_result_;
-		char * result_;
+		char *result_;
 
 		/* will wait for result and will not free code_ */
-		ret = lunatik_loadcode(code_, sz_code, & result_, & sz_result_);
+		ret = lunatik_loadcode(code_, sz_code, &result_, &sz_result_);
 
 		if (result_ != NULL){
 			if (sz_result_ > sz_result)
@@ -60,6 +57,3 @@ asmlinkage long sys_lua(const char * code, size_t sz_code, char * result, size_t
 
 	return ret;
 }
-
-/* end lsyscall.c */
-
