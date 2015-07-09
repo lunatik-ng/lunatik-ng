@@ -239,6 +239,7 @@ EXPORT_SYMBOL(lunatik_loadcode);
 void lunatik_result_free(const struct lunatik_result *result)
 {
 	if (result) {
+		pr_info("[lunatik] free result\n");
 		switch (result->r_type) {
 		case LUA_TSTRING:
 			kfree(result->r_string);
