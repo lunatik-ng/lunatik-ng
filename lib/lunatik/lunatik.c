@@ -236,7 +236,7 @@ out:
 }
 EXPORT_SYMBOL(lunatik_loadcode);
 
-void lunatik_result_free(struct lunatik_result *result)
+void lunatik_result_free(const struct lunatik_result *result)
 {
 	if (result) {
 		switch (result->r_type) {
