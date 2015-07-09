@@ -8,11 +8,40 @@
 
 #include <linux/lunatik/lauxlib.h>
 
+struct lunatik_result {
+	/*
+	 * Supported return types:
+	 *
+	 * - LUA_TNIL (no further details)
+	 * - LUA_TNUMBER (value in r_number)
+	 * - LUA_TBOOLEAN (value in r_boolean)
+	 * - LUA_TSTRING (copy in r_string, length in r_string_size)
+	 * - LUA_TUSERDATA (copy data in r_userdata, length in r_userdata_size,
+	 *   name of metatable in r_userdata_type)
+	 * - LUA_TLIGHTUSERDATA (pointer value in r_lightuserdata)
+	 */
+	int r_type;
+	union {
+		s64 r_number;
+		int r_boolean;
+		struct {
+			char *r_string;
+			size_t r_string_size;
+		};
+		struct {
+			void *r_userdata;
+			size_t r_userdata_size;
+			char *r_userdata_type;
+		};
+		void *r_lightuserdata;
+	};
+};
+
 lua_State *lunatik_get_global_state(void);
 
 int lunatik_loadcode(char *code, size_t sz_code,
-		char **presult, size_t *psz_result);
-
+		struct lunatik_result **presult);
+void lunatik_result_free(struct lunatik_result *result);
 int lunatik_openlib(lua_CFunction luaopen_func);
 
 /******************************************************************************
