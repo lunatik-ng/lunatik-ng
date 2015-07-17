@@ -94,7 +94,6 @@ static struct lunatik_result *lunatik_result_get(lua_State *L, int idx,
 		memcpy(r->r_userdata_type, r_userdata_type,
 			r_userdata_type_size);
 		r->r_userdata_type[r_userdata_type_size] = '\0';
-		lua_pop(L, 1);
 		break;
 	case LUA_TLIGHTUSERDATA:
 		r->r_lightuserdata = lua_touserdata(L, idx);
