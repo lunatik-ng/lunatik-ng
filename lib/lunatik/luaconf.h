@@ -382,8 +382,13 @@
 ** with Lua. A useful redefinition is to use assert.h.
 */
 #if defined(LUA_USE_APICHECK)
-#include <assert.h>
-#define luai_apicheck(L,o)	{ (void)L; assert(o); }
+# if defined(__KERNEL__)
+#  include <linux/bug.h>
+#  define luai_apicheck(L,o)	{ (void)L; BUG_ON(!(o)); }
+# else
+#  include <assert.h>
+#  define luai_apicheck(L,o)	{ (void)L; assert(o); }
+# endif
 #else
 #define luai_apicheck(L,o)	{ (void)L; }
 #endif
