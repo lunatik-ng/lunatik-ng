@@ -15,6 +15,13 @@ config LUNATIK_SYSCALL
 	  For userspace purposes a syscall (#359) is provided.  Signature:
 	  sys_lua(char *code, size_t code_len, char *result, size_t result_len).
 
+config DEBUG_LUNATIK
+	boolean "Debug Lunatik"
+	default n
+	depends on LUNATIK
+	help
+	  Activate DEBUG locally within Lunatik core
+
 source "lib/lunatik/bindings/Kconfig"
 
 endmenu

@@ -3,6 +3,10 @@
  * See Copyright Notice in lunatik.h
  */
 
+#ifdef CONFIG_DEBUG_LUNATIK
+#define DEBUG 1
+#endif
+
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -81,7 +85,7 @@ static struct lunatik_result *lunatik_result_get(lua_State *L, int idx,
 		} else {
 			r_userdata_type = "";
 		}
-		pr_info("[lunatik] userdata_type = %s\n", r_userdata_type);
+		pr_debug("[lunatik] userdata_type = %s\n", r_userdata_type);
 		r->r_userdata_type =
 			kmalloc(r_userdata_type_size + 1, GFP_KERNEL);
 		if (!r->r_userdata_type) {
@@ -114,7 +118,7 @@ static void loadcode_work_handler(struct work_struct *work)
 	struct loadcode_struct *loadcode = loadcode_work->work_data;
 	lua_State *L = loadcode_work->L;
 
-	pr_info("[lunatik] executing lua code: (0x%p) %s\n",
+	pr_debug("[lunatik] executing lua code: (0x%p) %s\n",
 		loadcode->code, loadcode->code);
 
 	loadcode->ret = luaL_loadbuffer(loadcode_work->L, loadcode->code,
@@ -132,10 +136,10 @@ static void loadcode_work_handler(struct work_struct *work)
 		/* signal */
 		loadcode->blocking = 0;
 	} else {
-//#ifdef DEBUG
+#ifdef DEBUG
 		struct lunatik_result *r;
 
-		pr_info("[lunatik] async lua execution done\n");
+		pr_debug("[lunatik] async lua execution done\n");
 
 		r = lunatik_result_get(L, -1, NULL);
 
@@ -160,12 +164,12 @@ static void loadcode_work_handler(struct work_struct *work)
 			default:
 				r_type_name = "UNKNOWN";
 			}
-			pr_info("[lunatik] result of type %s thrown away\n",
+			pr_debug("[lunatik] result of type %s thrown away\n",
 				r_type_name);
 		}
 
 		lunatik_result_free(r);
-//#endif
+#endif
 		lua_pop(loadcode_work->L, 1);
 
 		goto cleanup;
@@ -205,7 +209,7 @@ int lunatik_loadcode(char *code, size_t sz_code,
 		goto out_free;
 	}
 
-	pr_info("[lunatik] going to execute lua code: (0x%p) %s\n",
+	pr_debug("[lunatik] going to execute lua code: (0x%p) %s\n",
 		loadcode->code, loadcode->code);
 
 	lunatik_queue_work(loadcode_work);
@@ -238,7 +242,7 @@ EXPORT_SYMBOL(lunatik_loadcode);
 void lunatik_result_free(const struct lunatik_result *result)
 {
 	if (result) {
-		pr_info("[lunatik] free result\n");
+		pr_debug("[lunatik] free result\n");
 		switch (result->r_type) {
 		case LUA_TSTRING:
 			kfree(result->r_string);
@@ -297,7 +301,7 @@ static int __init lunatik_init(void)
 
 	lunatik_workqueue_init(L);
 
-	printk("Lunatik init done\n");
+	pr_info("Lunatik init done\n");
 	return 0;
 }
 
