@@ -38,9 +38,13 @@ struct lunatik_result {
 };
 
 lua_State *lunatik_get_global_state(void);
+void lunatik_lock_global_state(void);
+void lunatik_unlock_global_state(void);
 
 int lunatik_loadcode(char *code, size_t sz_code,
 		struct lunatik_result **presult);
+int lunatik_loadcode_direct(char *code, size_t sz_code,
+			struct lunatik_result **presult);
 void lunatik_result_free(const struct lunatik_result *result);
 int lunatik_openlib(lua_CFunction luaopen_func);
 
