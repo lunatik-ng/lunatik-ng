@@ -121,8 +121,11 @@ static void loadcode_internal(lua_State *L, struct loadcode_struct *loadcode,
 	lunatik_lock_global_state();
 
 	loadcode->ret = luaL_loadbuffer(L, loadcode->code,
-					loadcode->sz_code - 1, "loadcode") ||
-		lua_pcall(L, 0, 1, 0);
+					loadcode->sz_code - 1, "loadcode");
+	if (loadcode->ret)
+		pr_err("[lunatik] luaL_loadbuffer failed\n");
+	else
+		loadcode->ret = lua_pcall(L, 0, 1, 0);
 
 	if (loadcode->ret) {
 		if (lua_type(L, -1) == LUA_TSTRING)
