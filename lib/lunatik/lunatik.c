@@ -20,7 +20,7 @@
 #include "lunatik_workqueue.h"
 #include "lauxlib.h"
 
-struct loadcode_struct {
+struct loadcode_data {
 	char *code;
 	size_t sz_code;
 	struct lunatik_result *result;
@@ -112,28 +112,27 @@ out:
 	return r;
 }
 
-static void loadcode_internal(lua_State *L, struct loadcode_struct *loadcode,
+static void loadcode_internal(lua_State *L, struct loadcode_data *d,
 			bool need_result)
 {
-	pr_debug("[lunatik] executing lua code: (0x%p) %s\n",
-		loadcode->code, loadcode->code);
 
 	lunatik_lock_global_state();
+	pr_debug("[lunatik] executing lua code: (0x%p) %s\n", d->code, d->code);
 
-	loadcode->ret = luaL_loadbuffer(L, loadcode->code,
-					loadcode->sz_code - 1, "loadcode");
-	if (loadcode->ret)
+	d->ret = luaL_loadbuffer(L, d->code, d->sz_code - 1, "loadcode");
+	if (d->ret)
 		pr_err("[lunatik] luaL_loadbuffer failed\n");
-	else
-		loadcode->ret = lua_pcall(L, 0, 1, 0);
-
-	if (loadcode->ret) {
-		if (lua_type(L, -1) == LUA_TSTRING)
-			pr_err("[lunatik] %s\n", lua_tostring(L, -1));
+	else {
+		d->ret = lua_pcall(L, 0, 1, 0);
+		if (d->ret)
+			pr_err("[lunatik] lua_pcall failed\n");
 	}
 
+	if (d->ret && lua_type(L, -1) == LUA_TSTRING)
+		pr_err("[lunatik] %s\n", lua_tostring(L, -1));
+
 	if (need_result) {
-		loadcode->result = lunatik_result_get(L, -1, &loadcode->ret);
+		d->result = lunatik_result_get(L, -1, &d->ret);
 	} else {
 #ifdef DEBUG
 		struct lunatik_result *r;
@@ -176,103 +175,101 @@ static void loadcode_internal(lua_State *L, struct loadcode_struct *loadcode,
 	lunatik_unlock_global_state();
 }
 
-static void loadcode_work_handler(struct work_struct *work)
-{
-	struct lunatik_work_struct *loadcode_work =
-		lunatik_work_container_of(work);
-	struct loadcode_struct *loadcode = loadcode_work->work_data;
-	lua_State *L = loadcode_work->L;
-
-	loadcode_internal(L, loadcode, loadcode->blocking);
-
-	if (loadcode->blocking) {
-		/* signal */
-		loadcode->blocking = 0;
-	} else {
-		kfree(loadcode->code);
-		kfree(loadcode);
-		lunatik_delete_work(loadcode_work);
-	}
-}
-
 int lunatik_loadcode_direct(char *code, size_t sz_code,
 			struct lunatik_result **presult)
 {
 	int ret;
-	struct loadcode_struct *loadcode;
+	struct loadcode_data *d;
 
-	loadcode = kmalloc(sizeof(*loadcode), GFP_KERNEL);
-	if (!loadcode) {
+	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	if (!d) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	loadcode->code = code;
-	loadcode->sz_code = sz_code;
-	loadcode->result = NULL;
-	loadcode->ret = -1;
-	loadcode->blocking = 1;
+	d->code = code;
+	d->sz_code = sz_code;
+	d->result = NULL;
+	d->ret = -1;
+	d->blocking = 1;
 
-	loadcode_internal(lunatik_get_global_state(), loadcode,
-			presult != NULL);
+	loadcode_internal(lunatik_get_global_state(), d, presult != NULL);
 
 	if (presult)
-		*presult = loadcode->result;
-	ret = loadcode->ret;
+		*presult = d->result;
+	ret = d->ret;
 
-	kfree(loadcode);
+	kfree(d);
 out:
 	return ret;
 }
 EXPORT_SYMBOL(lunatik_loadcode_direct);
 
+static void loadcode_work_handler(struct work_struct *work)
+{
+	struct lunatik_work *lw = to_lunatik_work(work);
+	struct loadcode_data *d = lw->work_data;
+	lua_State *L = lw->L;
+
+	loadcode_internal(L, d, d->blocking);
+
+	if (d->blocking) {
+		/* signal */
+		d->blocking = 0;
+	} else {
+		kfree(d->code);
+		kfree(d);
+		lunatik_work_destroy(lw);
+	}
+}
+
 int lunatik_loadcode(char *code, size_t sz_code,
 		struct lunatik_result **presult)
 {
 	int ret;
-	struct lunatik_work_struct *loadcode_work;
-	struct loadcode_struct *loadcode;
+	struct lunatik_work *lw;
+	struct loadcode_data *d;
 
-	loadcode = kmalloc(sizeof(*loadcode), GFP_KERNEL);
-	if (!loadcode) {
+	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	if (!d) {
 		ret = -ENOMEM;
 		goto out;
 	}
 
-	loadcode->code = code;
-	loadcode->sz_code = sz_code;
-	loadcode->result = NULL;
-	loadcode->ret = -1;
-	loadcode->blocking = presult == NULL ? 0 : 1;
+	d->code = code;
+	d->sz_code = sz_code;
+	d->result = NULL;
+	d->ret = -1;
+	d->blocking = presult == NULL ? 0 : 1;
 
-	loadcode_work = lunatik_new_work(loadcode_work_handler, loadcode);
-	if (!loadcode_work) {
+	lw = lunatik_new_work(loadcode_work_handler, d);
+	if (!lw) {
 		ret = -ENOMEM;
 		goto out_free;
 	}
 
 	pr_debug("[lunatik] going to execute lua code: (0x%p) %s\n",
-		loadcode->code, loadcode->code);
+		d->code, d->code);
 
-	lunatik_queue_work(loadcode_work);
+	lunatik_queue_work(lw);
 
 	/*
 	 * Further processing and cleanup is delegated to job if running
 	 * asynchronously.
 	 */
-	if (!loadcode->blocking) {
+	if (!d->blocking) {
 		ret = 0;
 		goto out;
 	}
 
 	/* wait work */
-	while (loadcode->blocking)
+	while (d->blocking)
 		schedule();
 
-	*presult = loadcode->result;
-	ret = loadcode->ret;
+	*presult = d->result;
+	ret = d->ret;
 
-	lunatik_delete_work(loadcode_work);
+	lunatik_delete_work(lw);
 
 out_free:
 	/*
@@ -280,7 +277,7 @@ out_free:
 	 * We only free what we have allocated.
 	 */
 
-	kfree(loadcode);
+	kfree(d);
 out:
 	return ret;
 }
@@ -311,21 +308,21 @@ inline static void openlib(lua_State *L, lua_CFunction luaopen_func)
 
 static void openlib_work_handler(struct work_struct *work)
 {
-	struct lunatik_work_struct *openlib_work =
-		lunatik_work_container_of(work);
-	lua_CFunction luaopen_func = openlib_work->work_data;
+	struct lunatik_work *lw = to_lunatik_work(work);
+	lua_CFunction luaopen_func = lw->work_data;
 
-	openlib(openlib_work->L, luaopen_func);
+	openlib(lw->L, luaopen_func);
 }
 
 int lunatik_openlib(lua_CFunction luaopen_func)
 {
-	struct lunatik_work_struct *openlib_work =
+	struct lunatik_work *lw =
 		lunatik_new_work(openlib_work_handler, luaopen_func);
-	if (openlib_work == NULL)
+
+	if (!lw)
 		return -ENOMEM;
 
-	lunatik_queue_work(openlib_work);
+	lunatik_queue_work(lw);
 
 	return 0;
 }
