@@ -25,9 +25,11 @@ EXPORT_SYMBOL(lunatik_printk);
 
 static int __init lunatik_printk_init(void)
 {
-	lua_State *L = lunatik_get_global_state();
+	struct lunatik_context *lc = lunatik_default_context_get();
 
-	lua_register(L, "print", &lunatik_printk);
+	lunatik_context_lock(lc);
+	lua_register(lc->L, "print", &lunatik_printk);
+	lunatik_context_unlock(lc);
 
 	return 0;
 }

@@ -114,6 +114,7 @@ asmlinkage long sys_lua(const char __user *code, size_t code_size,
 			int __user *r_type, void __user *r_data,
 			size_t __user *r_size)
 {
+	struct lunatik_context *lc = lunatik_default_context_get();
 	int ret, ret2;
 	char *code_kern;
 
@@ -130,13 +131,14 @@ asmlinkage long sys_lua(const char __user *code, size_t code_size,
 
 	if (!r_type && !r_data && !r_size) {
 		/* will execute asynchronously and will free code_kern */
-		ret = lunatik_loadcode(code_kern, code_size, NULL);
+		ret = lunatik_loadcode(lc, code_kern, code_size, NULL);
 		goto out;
 	} else if (r_type && r_data && r_size) {
 		struct lunatik_result *lunatik_result = NULL;
 
 		/* will wait for result and will not free code_kern */
-		ret = lunatik_loadcode(code_kern, code_size, &lunatik_result);
+		ret = lunatik_loadcode(lc, code_kern, code_size,
+				&lunatik_result);
 
 		if (lunatik_result) {
 			ret2 = copy_lunatik_result_to_user(lunatik_result,

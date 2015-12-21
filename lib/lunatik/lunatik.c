@@ -15,9 +15,9 @@
 #include <linux/module.h>
 #include <linux/time.h>
 #include <linux/mutex.h>
+#include <linux/workqueue.h>
 #include <linux/lunatik.h>
 
-#include "lunatik_workqueue.h"
 #include "lauxlib.h"
 
 struct loadcode_data {
@@ -27,6 +27,16 @@ struct loadcode_data {
 	int ret;
 	char blocking;
 };
+
+struct lunatik_work {
+	struct lunatik_context *lc;
+	struct workqueue_struct *wq;
+	struct work_struct work;
+	void *work_data;
+};
+#define to_lunatik_work(work) \
+	container_of(work, struct lunatik_work, work)
+
 
 static struct lunatik_result *lunatik_result_get(lua_State *L, int idx,
 						int *perror)
@@ -112,12 +122,16 @@ out:
 	return r;
 }
 
-static void loadcode_internal(lua_State *L, struct loadcode_data *d,
+static void loadcode_internal(struct lunatik_context *lc,
+			struct loadcode_data *d,
 			bool need_result)
 {
+	lua_State *L;
 
-	lunatik_lock_global_state();
 	pr_debug("[lunatik] executing lua code: (0x%p) %s\n", d->code, d->code);
+
+	lunatik_context_lock(lc);
+	L = lc->L;
 
 	d->ret = luaL_loadbuffer(L, d->code, d->sz_code - 1, "loadcode");
 	if (d->ret)
@@ -172,11 +186,11 @@ static void loadcode_internal(lua_State *L, struct loadcode_data *d,
 
 	lua_pop(L, 1);
 
-	lunatik_unlock_global_state();
+	lunatik_context_unlock(lc);
 }
 
-int lunatik_loadcode_direct(char *code, size_t sz_code,
-			struct lunatik_result **presult)
+int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
+			size_t sz_code, struct lunatik_result **presult)
 {
 	int ret;
 	struct loadcode_data *d;
@@ -193,7 +207,7 @@ int lunatik_loadcode_direct(char *code, size_t sz_code,
 	d->ret = -1;
 	d->blocking = 1;
 
-	loadcode_internal(lunatik_get_global_state(), d, presult != NULL);
+	loadcode_internal(lc, d, presult != NULL);
 
 	if (presult)
 		*presult = d->result;
@@ -205,13 +219,98 @@ out:
 }
 EXPORT_SYMBOL(lunatik_loadcode_direct);
 
+int lunatik_workqueue_init(struct lunatik_workqueue *lwq, char *name)
+{
+	lwq->wq = alloc_ordered_workqueue("lunatik/%s", 0, name);
+
+	return lwq->wq ? 0 : -ENOMEM;
+}
+
+void lunatik_workqueue_deinit(struct lunatik_workqueue *lwq)
+{
+	destroy_workqueue(lwq->wq);
+}
+
+struct lunatik_work *lunatik_work_create(struct lunatik_context *lc,
+				work_func_t work_handler, void *work_data)
+{
+	struct lunatik_work *lw = kmalloc(sizeof(*lw), GFP_KERNEL);
+	if (!lw) {
+		lw = ERR_PTR(-ENOMEM);
+		goto out;
+	}
+
+	lw->lc = lc;
+	lw->wq = lc->lwq.wq;
+	lw->work_data = work_data;
+
+	INIT_WORK(&lw->work, work_handler);
+
+out:
+	return lw;
+}
+
+static inline void lunatik_work_destroy(struct lunatik_work *lw)
+{
+	kfree(lw);
+}
+
+static inline bool lunatik_work_queue(struct lunatik_work *lw)
+{
+	return queue_work(lw->wq, &lw->work);
+}
+
+struct lunatik_context *lunatik_context_create(char *name)
+{
+	int e;
+	struct lunatik_context *lc = kzalloc(sizeof(*lc), GFP_KERNEL);
+
+	if (!lc) {
+		e = -ENOMEM;
+		goto out_error;
+	}
+
+	lc->L = lua_open();
+	if (!lc->L) {
+		e = -ENOMEM;
+		goto out_free;
+	}
+
+	mutex_init(&lc->mutex);
+
+	e = lunatik_workqueue_init(&lc->lwq, name);
+	if (e)
+		goto out_error;
+
+	return lc;
+
+out_free:
+	kfree(lc);
+out_error:
+	return ERR_PTR(e);
+}
+EXPORT_SYMBOL(lunatik_context_create);
+
+void lunatik_context_destroy(struct lunatik_context *lc)
+{
+	if (!lc || IS_ERR(lc))
+		return;
+
+	lunatik_context_lock(lc);
+	lua_close(lc->L);
+	lc->L = NULL;
+	lunatik_context_unlock(lc);
+	mutex_destroy(&lc->mutex);
+	kfree(lc);
+}
+EXPORT_SYMBOL(lunatik_context_destroy);
+
 static void loadcode_work_handler(struct work_struct *work)
 {
 	struct lunatik_work *lw = to_lunatik_work(work);
 	struct loadcode_data *d = lw->work_data;
-	lua_State *L = lw->L;
 
-	loadcode_internal(L, d, d->blocking);
+	loadcode_internal(lw->lc, d, d->blocking);
 
 	if (d->blocking) {
 		/* signal */
@@ -223,7 +322,7 @@ static void loadcode_work_handler(struct work_struct *work)
 	}
 }
 
-int lunatik_loadcode(char *code, size_t sz_code,
+int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 		struct lunatik_result **presult)
 {
 	int ret;
@@ -242,7 +341,7 @@ int lunatik_loadcode(char *code, size_t sz_code,
 	d->ret = -1;
 	d->blocking = presult == NULL ? 0 : 1;
 
-	lw = lunatik_new_work(loadcode_work_handler, d);
+	lw = lunatik_work_create(lc, loadcode_work_handler, d);
 	if (!lw) {
 		ret = -ENOMEM;
 		goto out_free;
@@ -251,7 +350,7 @@ int lunatik_loadcode(char *code, size_t sz_code,
 	pr_debug("[lunatik] going to execute lua code: (0x%p) %s\n",
 		d->code, d->code);
 
-	lunatik_queue_work(lw);
+	lunatik_work_queue(lw);
 
 	/*
 	 * Further processing and cleanup is delegated to job if running
@@ -269,7 +368,7 @@ int lunatik_loadcode(char *code, size_t sz_code,
 	*presult = d->result;
 	ret = d->ret;
 
-	lunatik_delete_work(lw);
+	lunatik_work_destroy(lw);
 
 out_free:
 	/*
@@ -311,59 +410,64 @@ static void openlib_work_handler(struct work_struct *work)
 	struct lunatik_work *lw = to_lunatik_work(work);
 	lua_CFunction luaopen_func = lw->work_data;
 
-	openlib(lw->L, luaopen_func);
+	lunatik_context_lock(lw->lc);
+	openlib(lw->lc->L, luaopen_func);
+	lunatik_context_unlock(lw->lc);
 }
 
-int lunatik_openlib(lua_CFunction luaopen_func)
+int lunatik_openlib(struct lunatik_context *lc, lua_CFunction luaopen_func)
 {
 	struct lunatik_work *lw =
-		lunatik_new_work(openlib_work_handler, luaopen_func);
+		lunatik_work_create(lc, openlib_work_handler, luaopen_func);
 
 	if (!lw)
 		return -ENOMEM;
 
-	lunatik_queue_work(lw);
+	lunatik_work_queue(lw);
 
 	return 0;
 }
 EXPORT_SYMBOL(lunatik_openlib);
 
-static lua_State *L = NULL;
+static struct lunatik_context *lunatik_default_context;
 
-lua_State *lunatik_get_global_state(void)
+struct lunatik_context *lunatik_default_context_get(void)
 {
 	/* TODO implement reference counting (incl. module ref count) */
-	return L;
+	return lunatik_default_context;
 }
-EXPORT_SYMBOL(lunatik_get_global_state);
+EXPORT_SYMBOL(lunatik_default_context_get);
 
-static DEFINE_MUTEX(lunatik_global_state_mutex);
-
-void lunatik_lock_global_state(void)
+static int __init lunatik_default_context_init(void)
 {
-	mutex_lock(&lunatik_global_state_mutex);
-}
-EXPORT_SYMBOL(lunatik_lock_global_state);
+	lunatik_default_context = lunatik_context_create("default");
 
-void lunatik_unlock_global_state(void)
-{
-	mutex_unlock(&lunatik_global_state_mutex);
+	if (IS_ERR(lunatik_default_context))
+		return PTR_ERR(lunatik_default_context);
+	else
+		return 0;
 }
-EXPORT_SYMBOL(lunatik_unlock_global_state);
 
 static int __init lunatik_init(void)
 {
-	L = lua_open();
-	if (L == NULL)
-		return -ENOMEM;
+	int ret;
 
-	lunatik_workqueue_init(L);
+	ret = lunatik_default_context_init();
+	if (ret)
+		goto out;
 
 	pr_info("Lunatik init done\n");
-	return 0;
+out:
+	return ret;
+}
+
+static void __exit lunatik_exit(void)
+{
+	lunatik_context_destroy(lunatik_default_context);
 }
 
 MODULE_AUTHOR("Lourival Vieira Neto <lneto@inf.puc-rio.br>, Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
 MODULE_LICENSE("Dual MIT/GPL");
 
 module_init(lunatik_init);
+module_exit(lunatik_exit);

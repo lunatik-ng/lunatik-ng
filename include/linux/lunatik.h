@@ -6,6 +6,7 @@
  * See Copyright Notice at the end of this file.
  */
 
+#include <linux/mutex.h>
 #include <linux/lunatik/lauxlib.h>
 
 struct lunatik_result {
@@ -37,16 +38,30 @@ struct lunatik_result {
 	};
 };
 
-lua_State *lunatik_get_global_state(void);
-void lunatik_lock_global_state(void);
-void lunatik_unlock_global_state(void);
+struct lunatik_workqueue {
+	struct workqueue_struct *wq;
+};
 
-int lunatik_loadcode(char *code, size_t sz_code,
-		struct lunatik_result **presult);
-int lunatik_loadcode_direct(char *code, size_t sz_code,
-			struct lunatik_result **presult);
-void lunatik_result_free(const struct lunatik_result *result);
-int lunatik_openlib(lua_CFunction luaopen_func);
+struct lunatik_context {
+	lua_State *L;
+	struct mutex mutex;
+	struct lunatik_workqueue lwq;
+};
+
+extern struct lunatik_context *lunatik_context_create(char *name);
+extern void lunatik_context_destroy(struct lunatik_context *lc);
+#define lunatik_context_lock(context_ptr) mutex_lock(&(context_ptr)->mutex);
+#define lunatik_context_unlock(context_ptr) mutex_unlock(&(context_ptr)->mutex);
+struct lunatik_context *lunatik_default_context_get(void);
+
+extern int lunatik_loadcode(struct lunatik_context *lc, char *code,
+			size_t sz_code, struct lunatik_result **presult);
+extern int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
+				size_t sz_code,
+				struct lunatik_result **presult);
+extern void lunatik_result_free(const struct lunatik_result *result);
+extern int lunatik_openlib(struct lunatik_context *lc,
+			lua_CFunction luaopen_func);
 
 /******************************************************************************
  *  Copyright (C) 2009 Lourival Vieira Neto.  All rights reserved.

@@ -18,10 +18,12 @@ EXPORT_SYMBOL(lunatik_type);
 
 static int __init lunatik_inspect_init(void)
 {
-	lua_State *L = lunatik_get_global_state();
+	struct lunatik_context *lc = lunatik_default_context_get();
 
-	lua_register(L, "type", &lunatik_type);
-	lua_register(L, "gc_count", &lunatik_gc_count);
+	lunatik_context_lock(lc);
+	lua_register(lc->L, "type", &lunatik_type);
+	lua_register(lc->L, "gc_count", &lunatik_gc_count);
+	lunatik_context_unlock(lc);
 
 	return 0;
 }

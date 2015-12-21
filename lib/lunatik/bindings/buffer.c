@@ -91,9 +91,11 @@ static int __init lunatik_buf_init(void)
 		{ NULL, NULL }
 	};
 
-	lua_State *L = lunatik_get_global_state();
+	struct lunatik_context *lc = lunatik_default_context_get();
 
-	luaL_register(L, "buffer", lib_buffer);
+	lunatik_context_lock(lc);
+	luaL_register(lc->L, "buffer", lib_buffer);
+	lunatik_context_unlock(lc);
 
 	return 0;
 }
