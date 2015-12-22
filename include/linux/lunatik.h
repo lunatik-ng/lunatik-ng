@@ -46,6 +46,15 @@ struct lunatik_context {
 	lua_State *L;
 	struct mutex mutex;
 	struct lunatik_workqueue lwq;
+	struct list_head active_bindings;
+};
+
+typedef int (*lunatik_binding_func)(struct lunatik_context *lc);
+
+struct lunatik_binding {
+	struct module *owner;
+	lunatik_binding_func regfunc;
+	struct list_head link;
 };
 
 extern struct lunatik_context *lunatik_context_create(char *name);
@@ -62,6 +71,10 @@ extern int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
 extern void lunatik_result_free(const struct lunatik_result *result);
 extern int lunatik_openlib(struct lunatik_context *lc,
 			lua_CFunction luaopen_func);
+extern struct lunatik_binding *lunatik_bindings_register(
+	struct module *owner, lunatik_binding_func regfunc);
+extern void lunatik_bindings_unregister(struct lunatik_binding *b);
+extern int lunatik_bindings_load(struct lunatik_context *lc);
 
 /******************************************************************************
  *  Copyright (C) 2009 Lourival Vieira Neto.  All rights reserved.

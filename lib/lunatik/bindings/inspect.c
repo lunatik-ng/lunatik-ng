@@ -16,10 +16,8 @@ int lunatik_type(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_type);
 
-static int __init lunatik_inspect_init(void)
+static int lunatik_inspect_register(struct lunatik_context *lc)
 {
-	struct lunatik_context *lc = lunatik_default_context_get();
-
 	lunatik_context_lock(lc);
 	lua_register(lc->L, "type", &lunatik_type);
 	lua_register(lc->L, "gc_count", &lunatik_gc_count);
@@ -28,7 +26,25 @@ static int __init lunatik_inspect_init(void)
 	return 0;
 }
 
+static struct lunatik_binding *lunatik_inspect_binding;
+
+static int __init lunatik_inspect_init(void)
+{
+	lunatik_inspect_binding = lunatik_bindings_register(
+		THIS_MODULE, lunatik_inspect_register);
+
+	return IS_ERR(lunatik_inspect_binding) ?
+		PTR_ERR(lunatik_inspect_binding) : 0;
+}
+
+static void __exit lunatik_inspect_exit(void)
+{
+	if (!IS_ERR_OR_NULL(lunatik_inspect_binding))
+		lunatik_bindings_unregister(lunatik_inspect_binding);
+}
+
 MODULE_AUTHOR("Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
 MODULE_LICENSE("Dual MIT/GPL");
 
 module_init(lunatik_inspect_init);
+module_exit(lunatik_inspect_exit);

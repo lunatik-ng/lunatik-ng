@@ -37,6 +37,11 @@ struct lunatik_work {
 #define to_lunatik_work(work) \
 	container_of(work, struct lunatik_work, work)
 
+struct active_binding {
+	struct lunatik_binding *b;
+	struct list_head l;
+};
+
 
 static struct lunatik_result *lunatik_result_get(lua_State *L, int idx,
 						int *perror)
@@ -278,6 +283,8 @@ struct lunatik_context *lunatik_context_create(char *name)
 
 	mutex_init(&lc->mutex);
 
+	INIT_LIST_HEAD(&lc->active_bindings);
+
 	e = lunatik_workqueue_init(&lc->lwq, name);
 	if (e)
 		goto out_error;
@@ -293,14 +300,25 @@ EXPORT_SYMBOL(lunatik_context_create);
 
 void lunatik_context_destroy(struct lunatik_context *lc)
 {
+	struct active_binding *ab, *tmp;
+
 	if (!lc || IS_ERR(lc))
 		return;
 
 	lunatik_context_lock(lc);
+
+	list_for_each_entry_safe(ab, tmp, &lc->active_bindings, l) {
+		module_put(ab->b->owner);
+		list_del(&ab->l);
+	}
+
 	lua_close(lc->L);
 	lc->L = NULL;
+
 	lunatik_context_unlock(lc);
+
 	mutex_destroy(&lc->mutex);
+
 	kfree(lc);
 }
 EXPORT_SYMBOL(lunatik_context_destroy);
@@ -429,12 +447,88 @@ int lunatik_openlib(struct lunatik_context *lc, lua_CFunction luaopen_func)
 }
 EXPORT_SYMBOL(lunatik_openlib);
 
+LIST_HEAD(lunatik_bindings);
+
+struct lunatik_binding *lunatik_bindings_register(
+	struct module *owner, lunatik_binding_func regfunc)
+{
+	struct lunatik_binding *b = kmalloc(sizeof(*b), GFP_KERNEL);
+	if (!b)
+		return ERR_PTR(-ENOMEM);
+
+	b->owner = owner;
+	b->regfunc = regfunc;
+
+	list_add_tail(&b->link, &lunatik_bindings);
+
+	return b;
+}
+EXPORT_SYMBOL(lunatik_bindings_register);
+
+void lunatik_bindings_unregister(struct lunatik_binding *b)
+{
+	list_del(&b->link);
+	kfree(b);
+}
+EXPORT_SYMBOL(lunatik_bindings_unregister);
+
+int lunatik_bindings_load(struct lunatik_context *lc)
+{
+	int ret = 0;
+	struct lunatik_binding *b;
+
+	list_for_each_entry(b, &lunatik_bindings, link) {
+		struct active_binding *ab;
+
+		/* skip bindings which are already active */
+		list_for_each_entry(ab, &lc->active_bindings, l) {
+			if (ab->b == b)
+				goto next_binding;
+		}
+
+		if (try_module_get(b->owner)) {
+			ret = b->regfunc(lc);
+			if (ret)
+				goto out;
+
+			ab = kmalloc(sizeof(*ab), GFP_KERNEL);
+			if (!ab) {
+				ret = -ENOMEM;
+				goto out;
+			}
+
+			ab->b = b;
+
+			list_add_tail(&ab->l, &lc->active_bindings);
+		}
+
+	next_binding:
+		;
+	}
+
+out:
+	return ret;
+}
+EXPORT_SYMBOL(lunatik_bindings_load);
+
 static struct lunatik_context *lunatik_default_context;
 
 struct lunatik_context *lunatik_default_context_get(void)
 {
+	int ret;
+
+	/*
+	 * At module init time (of lunatik_core.ko) no bindings will be known.
+	 * So we are forced to load them into the default context at a later
+	 * point in time.  Also we want bindings from modules loaded much
+	 * later to be available, too.  ('load' only loads bindings which are
+	 * not active already.)
+	 */
+	ret = lunatik_bindings_load(lunatik_default_context);
+
 	/* TODO implement reference counting (incl. module ref count) */
-	return lunatik_default_context;
+
+	return ret ? ERR_PTR(ret) : lunatik_default_context;
 }
 EXPORT_SYMBOL(lunatik_default_context_get);
 

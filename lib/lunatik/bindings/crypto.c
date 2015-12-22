@@ -65,15 +65,13 @@ int lunatik_get_random_bytes(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_get_random_bytes);
 
-static int __init lunatik_crypto_init(void)
+static int lunatik_crypto_register(struct lunatik_context *lc)
 {
 	struct luaL_Reg lib_crypto[] = {
 		{ "sha1", &lunatik_sha1 },
 		{ "random", &lunatik_get_random_bytes },
 		{ NULL, NULL }
 	};
-
-	struct lunatik_context *lc = lunatik_default_context_get();
 
 	lunatik_context_lock(lc);
 	luaL_register(lc->L, "crypto", lib_crypto);
@@ -82,7 +80,25 @@ static int __init lunatik_crypto_init(void)
 	return 0;
 }
 
+static struct lunatik_binding *lunatik_crypto_binding;
+
+static int __init lunatik_crypto_init(void)
+{
+	lunatik_crypto_binding = lunatik_bindings_register(
+		THIS_MODULE, lunatik_crypto_register);
+
+	return IS_ERR(lunatik_crypto_binding) ?
+		PTR_ERR(lunatik_crypto_binding) : 0;
+}
+
+static void __exit lunatik_crypto_exit(void)
+{
+	if (!IS_ERR_OR_NULL(lunatik_crypto_binding))
+		lunatik_bindings_unregister(lunatik_crypto_binding);
+}
+
 MODULE_AUTHOR("Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
 MODULE_LICENSE("Dual MIT/GPL");
 
 module_init(lunatik_crypto_init);
+module_exit(lunatik_crypto_exit);

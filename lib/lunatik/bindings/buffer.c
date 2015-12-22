@@ -84,14 +84,12 @@ int lunatik_buf_new(lua_State *L) {
 }
 EXPORT_SYMBOL(lunatik_buf_new);
 
-static int __init lunatik_buf_init(void)
+static int lunatik_buf_register(struct lunatik_context *lc)
 {
 	struct luaL_reg lib_buffer[] = {
 		{ "new", &lunatik_buf_new },
 		{ NULL, NULL }
 	};
-
-	struct lunatik_context *lc = lunatik_default_context_get();
 
 	lunatik_context_lock(lc);
 	luaL_register(lc->L, "buffer", lib_buffer);
@@ -100,7 +98,25 @@ static int __init lunatik_buf_init(void)
 	return 0;
 }
 
+static struct lunatik_binding *lunatik_buf_binding;
+
+static int __init lunatik_buf_init(void)
+{
+	lunatik_buf_binding = lunatik_bindings_register(
+		THIS_MODULE, lunatik_buf_register);
+
+	return IS_ERR(lunatik_buf_binding) ?
+		PTR_ERR(lunatik_buf_binding) : 0;
+}
+
+static void __exit lunatik_buf_exit(void)
+{
+	if (!IS_ERR_OR_NULL(lunatik_buf_binding))
+		lunatik_bindings_unregister(lunatik_buf_binding);
+}
+
 MODULE_AUTHOR("Matthias Grawinkel <grawinkel@uni-mainz.de>, Daniel Bausch <bausch@dvs.tu-darmstadt.de>");
 MODULE_LICENSE("Dual MIT/GPL");
 
 module_init(lunatik_buf_init);
+module_exit(lunatik_buf_exit);
