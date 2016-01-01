@@ -110,13 +110,28 @@ out:
 	return ret;
 }
 
+struct sys_lua_async_info {
+	struct lunatik_context *lc;
+	char *code_kern;
+};
+
+static void sys_lua_async_cleanup(void *arg, int ret)
+{
+	struct sys_lua_async_info *info = arg;
+
+	lunatik_context_destroy(info->lc);
+	kfree(info->code_kern);
+	kfree(info);
+}
+
 asmlinkage long sys_lua(const char __user *code, size_t code_size,
 			int __user *r_type, void __user *r_data,
 			size_t __user *r_size)
 {
-	struct lunatik_context *lc = lunatik_default_context_get();
 	int ret, ret2;
 	char *code_kern;
+	struct lunatik_context *lc;
+	char lcname[64];
 
 	code_kern = kmalloc(code_size, GFP_KERNEL);
 	if (code_kern == NULL) {
@@ -129,15 +144,39 @@ asmlinkage long sys_lua(const char __user *code, size_t code_size,
 		goto out_code;
 	}
 
+	snprintf(lcname, sizeof(lcname), "syscall:%d", current->pid);
+
+	lc = lunatik_context_create(lcname);
+	if (IS_ERR(lc)) {
+		ret = PTR_ERR(lc);
+		goto out_code;
+	}
+
+	ret = lunatik_bindings_load(lc);
+	if (ret)
+		goto out_lc;
+
 	if (!r_type && !r_data && !r_size) {
-		/* will execute asynchronously and will free code_kern */
-		ret = lunatik_loadcode(lc, code_kern, code_size, NULL);
+		struct sys_lua_async_info *callback_info;
+
+		callback_info = kmalloc(sizeof(*callback_info), GFP_KERNEL);
+		if (!callback_info) {
+			ret = -ENOMEM;
+			goto out_lc;
+		}
+
+		callback_info->lc = lc;
+		callback_info->code_kern = code_kern;
+
+		lunatik_loadcode_async_nores(lc, code_kern, code_size,
+					sys_lua_async_cleanup, callback_info);
+
+		/* skip cleanup - will be done in callback */
 		goto out;
 	} else if (r_type && r_data && r_size) {
 		struct lunatik_result *lunatik_result = NULL;
 
-		/* will wait for result and will not free code_kern */
-		ret = lunatik_loadcode(lc, code_kern, code_size,
+		ret = lunatik_loadcode_sync(lc, code_kern, code_size,
 				&lunatik_result);
 
 		if (lunatik_result) {
@@ -152,6 +191,8 @@ asmlinkage long sys_lua(const char __user *code, size_t code_size,
 		ret = -EINVAL;
 	}
 
+out_lc:
+	lunatik_context_destroy(lc);
 out_code:
 	kfree(code_kern);
 out:

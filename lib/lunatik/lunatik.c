@@ -15,18 +15,11 @@
 #include <linux/module.h>
 #include <linux/time.h>
 #include <linux/mutex.h>
+#include <linux/semaphore.h>
 #include <linux/workqueue.h>
 #include <linux/lunatik.h>
 
 #include "lauxlib.h"
-
-struct loadcode_data {
-	char *code;
-	size_t sz_code;
-	struct lunatik_result *result;
-	int ret;
-	char blocking;
-};
 
 struct lunatik_work {
 	struct lunatik_context *lc;
@@ -36,6 +29,21 @@ struct lunatik_work {
 };
 #define to_lunatik_work(work) \
 	container_of(work, struct lunatik_work, work)
+
+typedef void (*lunatik_loadcode_callback_work)(struct lunatik_work *lw);
+
+struct loadcode_data {
+	char *code;
+	size_t sz_code;
+	struct lunatik_result *result;
+	int ret;
+	bool need_result;
+	void *callback_arg;
+	lunatik_loadcode_callback callback;
+	lunatik_loadcode_callback_nores callback_nores;
+	lunatik_loadcode_callback_work callback_work;
+	struct semaphore complete;
+};
 
 struct active_binding {
 	struct lunatik_binding *b;
@@ -128,8 +136,7 @@ out:
 }
 
 static void loadcode_internal(struct lunatik_context *lc,
-			struct loadcode_data *d,
-			bool need_result)
+			struct loadcode_data *d)
 {
 	lua_State *L;
 
@@ -150,7 +157,7 @@ static void loadcode_internal(struct lunatik_context *lc,
 	if (d->ret && lua_type(L, -1) == LUA_TSTRING)
 		pr_err("[lunatik] %s\n", lua_tostring(L, -1));
 
-	if (need_result) {
+	if (d->need_result) {
 		d->result = lunatik_result_get(L, -1, &d->ret);
 	} else {
 #ifdef DEBUG
@@ -194,13 +201,20 @@ static void loadcode_internal(struct lunatik_context *lc,
 	lunatik_context_unlock(lc);
 }
 
+/**
+ * lunatik_loadcode_direct - Lua execution in current context
+ * @lc: context whos workqueue is used
+ * @code: the Lua code to be executed (kernel memory)
+ * @sz_code: size of the code string (including zero byte at the end)
+ * @presult: pointer to the variable where the result shall be stored
+ */
 int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
 			size_t sz_code, struct lunatik_result **presult)
 {
 	int ret;
 	struct loadcode_data *d;
 
-	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d) {
 		ret = -ENOMEM;
 		goto out;
@@ -208,11 +222,10 @@ int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
 
 	d->code = code;
 	d->sz_code = sz_code;
-	d->result = NULL;
 	d->ret = -1;
-	d->blocking = 1;
+	d->need_result = presult != NULL;
 
-	loadcode_internal(lc, d, presult != NULL);
+	loadcode_internal(lc, d);
 
 	if (presult)
 		*presult = d->result;
@@ -328,18 +341,31 @@ static void loadcode_work_handler(struct work_struct *work)
 	struct lunatik_work *lw = to_lunatik_work(work);
 	struct loadcode_data *d = lw->work_data;
 
-	loadcode_internal(lw->lc, d, d->blocking);
+	loadcode_internal(lw->lc, d);
 
-	if (d->blocking) {
-		/* signal */
-		d->blocking = 0;
-	} else {
-		kfree(d->code);
-		kfree(d);
-		lunatik_work_destroy(lw);
-	}
+	up(&d->complete);
+
+	if (d->callback)
+		d->callback(d->callback_arg, d->ret, d->result);
+
+	if (d->callback_nores)
+		d->callback_nores(d->callback_arg, d->ret);
+
+	if (d->callback_work)
+		d->callback_work(lw);
 }
 
+static void loadcode_work_cleanup(struct lunatik_work *lw)
+{
+	struct loadcode_data *d = lw->work_data;
+
+	kfree(d->code);
+	kfree(d);
+	lunatik_work_destroy(lw);
+}
+
+/* DEPRECATED - use direct, sync, or async variant instead */
+/* will execute and free code asynchronously iff no result is requested */
 int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 		struct lunatik_result **presult)
 {
@@ -347,7 +373,7 @@ int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 	struct lunatik_work *lw;
 	struct loadcode_data *d;
 
-	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d) {
 		ret = -ENOMEM;
 		goto out;
@@ -355,9 +381,12 @@ int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 
 	d->code = code;
 	d->sz_code = sz_code;
-	d->result = NULL;
 	d->ret = -1;
-	d->blocking = presult == NULL ? 0 : 1;
+	if (presult)
+		d->need_result = 1;
+	else
+		d->callback_work = loadcode_work_cleanup;
+	sema_init(&d->complete, 0);
 
 	lw = lunatik_work_create(lc, loadcode_work_handler, d);
 	if (!lw) {
@@ -365,7 +394,7 @@ int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 		goto out_free;
 	}
 
-	pr_debug("[lunatik] going to execute lua code: (0x%p) %s\n",
+	pr_debug("[lunatik_loadcode] going to execute lua code: (0x%p) %s\n",
 		d->code, d->code);
 
 	lunatik_work_queue(lw);
@@ -374,31 +403,216 @@ int lunatik_loadcode(struct lunatik_context *lc, char *code, size_t sz_code,
 	 * Further processing and cleanup is delegated to job if running
 	 * asynchronously.
 	 */
-	if (!d->blocking) {
+	if (!presult) {
 		ret = 0;
 		goto out;
 	}
 
 	/* wait work */
-	while (d->blocking)
-		schedule();
+	ret = down_interruptible(&d->complete);
+	if (ret)
+		goto out_free_work;
 
 	*presult = d->result;
 	ret = d->ret;
 
+out_free_work:
 	lunatik_work_destroy(lw);
-
 out_free:
 	/*
 	 * In the synchronous case the caller is expected to free code.
 	 * We only free what we have allocated.
 	 */
-
 	kfree(d);
 out:
 	return ret;
 }
 EXPORT_SYMBOL(lunatik_loadcode);
+
+/**
+ * lunatik_loadcode_sync - Lua execution on workqueue with waiting until done
+ * @lc: context whos workqueue is used
+ * @code: the Lua code to be executed (kernel memory)
+ * @sz_code: size of the code string (including zero byte at the end)
+ * @presult: pointer to the variable where the result shall be stored
+ */
+int lunatik_loadcode_sync(struct lunatik_context *lc, char *code,
+			size_t sz_code, struct lunatik_result **presult)
+{
+	int ret;
+	struct lunatik_work *lw;
+	struct loadcode_data *d;
+
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
+	if (!d) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	d->code = code;
+	d->sz_code = sz_code;
+	d->ret = -1;
+	if (presult)
+		d->need_result = 1;
+	sema_init(&d->complete, 0);
+
+	lw = lunatik_work_create(lc, loadcode_work_handler, d);
+	if (!lw) {
+		ret = -ENOMEM;
+		goto out_free;
+	}
+
+	pr_debug("[lunatik_loadcode_sync] going to execute lua code: (0x%p) %s\n",
+		d->code, d->code);
+
+	lunatik_work_queue(lw);
+
+	/* wait work */
+	ret = down_interruptible(&d->complete);
+	if (ret)
+		goto out_free_work;
+
+	if (presult)
+		*presult = d->result;
+	ret = d->ret;
+
+out_free_work:
+	lunatik_work_destroy(lw);
+out_free:
+	kfree(d);
+out:
+	return ret;
+}
+EXPORT_SYMBOL(lunatik_loadcode_sync);
+
+/* this does not free code - must be done in user callback if need be */
+static void loadcode_async_work_cleanup(struct lunatik_work *lw)
+{
+	struct loadcode_data *d = lw->work_data;
+
+	kfree(d);
+	lunatik_work_destroy(lw);
+}
+
+/**
+ * lunatik_loadcode_async - asynchronous Lua execution
+ * @lc: context whos workqueue is used
+ * @code: the Lua code to be executed (kernel memory)
+ * @sz_code: size of the code string (including zero byte at the end)
+ * @callb: address of callback function that will be called when done
+ * @callb_arg: general purpose argument supplied to the callback
+ *
+ * The result is supplied to the callback function.
+ *
+ * Compared to lunatik_loadcode this does not free code.  Therefore this must
+ * be done in the callback function if need be.
+ */
+int lunatik_loadcode_async(struct lunatik_context *lc, char *code,
+			size_t sz_code,	lunatik_loadcode_callback callb,
+			void *callb_arg)
+{
+	int ret;
+	struct lunatik_work *lw;
+	struct loadcode_data *d;
+
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
+	if (!d) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	d->code = code;
+	d->sz_code = sz_code;
+	d->ret = -1;
+	d->need_result = 1;
+	d->callback = callb;
+	d->callback_arg = callb_arg;
+	d->callback_work = loadcode_async_work_cleanup;
+	sema_init(&d->complete, 0);
+
+	lw = lunatik_work_create(lc, loadcode_work_handler, d);
+	if (!lw) {
+		ret = -ENOMEM;
+		goto out_free;
+	}
+
+	pr_debug("[lunatik_loadcode_async] going to execute lua code: (0x%p) %s\n",
+		d->code, d->code);
+
+	lunatik_work_queue(lw);
+
+	/*
+	 * Further processing and cleanup is delegated to callbacks.
+	 */
+	ret = 0;
+	goto out;
+
+out_free:
+	kfree(d);
+out:
+	return ret;
+}
+EXPORT_SYMBOL(lunatik_loadcode_async);
+
+/**
+ * lunatik_loadcode_async_nores - asynchronous Lua execution (ignore result)
+ * @lc: context whos workqueue is used
+ * @code: the Lua code to be executed (kernel memory)
+ * @sz_code: size of the code string (including zero byte at the end)
+ * @callb: address of callback function that will be called when done
+ * @callb_arg: general purpose argument supplied to the callback
+ *
+ * The result of the Lua execution will be silently and efficiently ignored.
+ *
+ * Compared to lunatik_loadcode this does not free code.  Therefore this must
+ * be done in the callback function if need be.
+ */
+int lunatik_loadcode_async_nores(struct lunatik_context *lc, char *code,
+				size_t sz_code,	lunatik_loadcode_callback_nores callb,
+				void *callb_arg)
+{
+	int ret;
+	struct lunatik_work *lw;
+	struct loadcode_data *d;
+
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
+	if (!d) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	d->code = code;
+	d->sz_code = sz_code;
+	d->ret = -1;
+	d->need_result = 0;
+	d->callback_nores = callb;
+	d->callback_arg = callb_arg;
+	d->callback_work = loadcode_async_work_cleanup;
+	sema_init(&d->complete, 0);
+
+	lw = lunatik_work_create(lc, loadcode_work_handler, d);
+	if (!lw) {
+		ret = -ENOMEM;
+		goto out_free;
+	}
+
+	pr_debug("[lunatik_loadcode_async_nores] going to execute lua code: (0x%p) %s\n",
+		d->code, d->code);
+
+	lunatik_work_queue(lw);
+
+	/*
+	 * Further processing and cleanup is delegated to callbacks.
+	 */
+	ret = 0;
+	goto out;
+
+out_free:
+	kfree(d);
+out:
+	return ret;
+}
+EXPORT_SYMBOL(lunatik_loadcode_async_nores);
 
 void lunatik_result_free(const struct lunatik_result *result)
 {

@@ -57,17 +57,33 @@ struct lunatik_binding {
 	struct list_head link;
 };
 
+typedef void (*lunatik_loadcode_callback)(void *arg, int ret,
+					struct lunatik_result *r);
+typedef void (*lunatik_loadcode_callback_nores)(void *arg, int ret);
+
 extern struct lunatik_context *lunatik_context_create(char *name);
 extern void lunatik_context_destroy(struct lunatik_context *lc);
 #define lunatik_context_lock(context_ptr) mutex_lock(&(context_ptr)->mutex);
 #define lunatik_context_unlock(context_ptr) mutex_unlock(&(context_ptr)->mutex);
 struct lunatik_context *lunatik_default_context_get(void);
 
+/* DEPRECATED - use direct, sync, or async variant instead */
 extern int lunatik_loadcode(struct lunatik_context *lc, char *code,
 			size_t sz_code, struct lunatik_result **presult);
 extern int lunatik_loadcode_direct(struct lunatik_context *lc, char *code,
 				size_t sz_code,
 				struct lunatik_result **presult);
+extern int lunatik_loadcode_sync(struct lunatik_context *lc, char *code,
+				size_t sz_code,
+				struct lunatik_result **presult);
+extern int lunatik_loadcode_async(struct lunatik_context *lc, char *code,
+				size_t sz_code,
+				lunatik_loadcode_callback callb,
+				void *callb_arg);
+extern int lunatik_loadcode_async_nores(struct lunatik_context *lc, char *code,
+					size_t sz_code,
+					lunatik_loadcode_callback_nores callb,
+					void *callb_arg);
 extern void lunatik_result_free(const struct lunatik_result *result);
 extern int lunatik_openlib(struct lunatik_context *lc,
 			lua_CFunction luaopen_func);
